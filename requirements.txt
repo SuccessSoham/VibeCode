@@ -2,3 +2,13 @@ pandas
 matplotlib
 seaborn
 streamlit
+pandas
+matplotlib
+seaborn
+streamlit
+transformers
+torch
+accelerate
+python-dotenv
+openai
+numpy
