@@ -276,11 +276,11 @@ with tab4:
     st.header("💬 Chat with Data")
     st.write("Ask questions about your data using natural language. The AI will answer using open source models.")
 
-    # Load Gemma or other Hugging Face model (cached)
+    # Load Qwen or other Hugging Face model (cached)
     @st.cache_resource
     def load_hf_model():
-        tokenizer = AutoTokenizer.from_pretrained("google/gemma-2b-it", token=HF_TOKEN)
-        model = AutoModelForCausalLM.from_pretrained("google/gemma-2b-it", token=HF_TOKEN)
+        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct", token=HF_TOKEN)
+        model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct", token=HF_TOKEN)
         return tokenizer, model
 
     tokenizer, model = load_hf_model()
