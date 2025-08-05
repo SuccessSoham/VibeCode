@@ -307,7 +307,7 @@ with tab4:
                 input_text = f"You are a data analyst. Here is a sample of the dataset:\n{df_info}\n\nUser question: {prompt}\n\nAnswer in natural language."
                 with st.spinner("Generating answer..."):
                     input_ids = tokenizer(input_text, return_tensors="pt").to(model.device)
-                    outputs = model.generate(**input_ids, max_new_tokens=256)
+                    outputs = model.generate(**input_ids, max_new_tokens=1024)
                     raw_answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
                 # Remove prompt context from output if present
                 # Find the last occurrence of 'Answer in natural language.' and show only what comes after
