@@ -3,6 +3,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
+from src.code_executor import execute_code
+from dotenv import load_dotenv
+import time
+
+load_dotenv() # Load environment variables from .env file
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Import new utility modules from src
 
@@ -100,59 +108,62 @@ dashboard_uploaded_file = st.sidebar.file_uploader("Upload your CSV file", type=
 
 # Load default or uploaded data for dashboard
 default_path = "data/business_metrics.csv"
-global_df = None
-if dashboard_uploaded_file:
-    global_df = pd.read_csv(dashboard_uploaded_file)
-elif os.path.exists(default_path):
-    global_df = pd.read_csv(default_path)
 
-if global_df is not None:
+if "global_df" not in st.session_state:
+    st.session_state.global_df = None
+
+if dashboard_uploaded_file:
+    st.session_state.global_df = pd.read_csv(dashboard_uploaded_file)
+elif os.path.exists(default_path) and st.session_state.global_df is None:
+    st.session_state.global_df = pd.read_csv(default_path)
+
+if st.session_state.global_df is not None:
     # Convert Month column to datetime
-    if "Month" in global_df.columns:
-        global_df["Month"] = pd.to_datetime(global_df["Month"], format="%b-%Y", errors='coerce')
+    if "Month" in st.session_state.global_df.columns:
+        st.session_state.global_df["Month"] = pd.to_datetime(st.session_state.global_df["Month"], format="%b-%Y", errors='coerce')
 
     # Sidebar filters
     st.sidebar.header("🔍 Filter Criteria (for Dashboard Tabs)")
 
     # Timeline filter
     start_date = end_date = None
-    if "Month" in global_df.columns and pd.api.types.is_datetime64_any_dtype(global_df["Month"]):
-        min_date = global_df["Month"].min().date()
-        max_date = global_df["Month"].max().date()
+    if "Month" in st.session_state.global_df.columns and pd.api.types.is_datetime64_any_dtype(st.session_state.global_df["Month"]):
+        min_date = st.session_state.global_df["Month"].min().date()
+        max_date = st.session_state.global_df["Month"].max().date()
         start_date = st.sidebar.date_input("Start date", value=min_date, min_value=min_date, max_value=max_date)
         end_date = st.sidebar.date_input("End date", value=max_date, min_value=min_date, max_value=max_date)
         start_date = pd.Timestamp(start_date)
         end_date = pd.Timestamp(end_date)
 
     # Numeric filters
-    numeric_cols = global_df.select_dtypes(include='number').columns
+    numeric_cols = st.session_state.global_df.select_dtypes(include='number').columns
     revenue_range = expenses_range = satisfaction_range = (0, 0)
 
     if "Revenue" in numeric_cols:
         revenue_range = st.sidebar.slider("Revenue range:",
-            int(global_df["Revenue"].min()), int(global_df["Revenue"].max()),
-            (int(global_df["Revenue"].min()), int(global_df["Revenue"].max())),
+            int(st.session_state.global_df["Revenue"].min()), int(st.session_state.global_df["Revenue"].max()),
+            (int(st.session_state.global_df["Revenue"].min()), int(st.session_state.global_df["Revenue"].max())),
             key="revenue_slider"
         )
 
     if "Expenses" in numeric_cols:
         expenses_range = st.sidebar.slider("Expenses range:",
-            int(global_df["Expenses"].min()), int(global_df["Expenses"].max()),
-            (int(global_df["Expenses"].min()), int(global_df["Expenses"].max())),
+            int(st.session_state.global_df["Expenses"].min()), int(st.session_state.global_df["Expenses"].max()),
+            (int(st.session_state.global_df["Expenses"].min()), int(st.session_state.global_df["Expenses"].max())),
             key="expenses_slider"
         )
 
     if "Customer_Satisfaction" in numeric_cols:
         satisfaction_range = st.sidebar.slider("Customer Satisfaction range:",
-            int(global_df["Customer_Satisfaction"].min()), int(global_df["Customer_Satisfaction"].max()),
-            (int(global_df["Customer_Satisfaction"].min()), int(global_df["Customer_Satisfaction"].max())),
+            int(st.session_state.global_df["Customer_Satisfaction"].min()), int(st.session_state.global_df["Customer_Satisfaction"].max()),
+            (int(st.session_state.global_df["Customer_Satisfaction"].min()), int(st.session_state.global_df["Customer_Satisfaction"].max())),
             key="satisfaction_slider"
         )
 
     # Apply filters
-    filtered_df = global_df.copy()
+    filtered_df = st.session_state.global_df.copy()
     if start_date and end_date:
-        filtered_df = filtered_df[(global_df["Month"] >= start_date) & (global_df["Month"] <= end_date)]
+        filtered_df = filtered_df[(st.session_state.global_df["Month"] >= start_date) & (st.session_state.global_df["Month"] <= end_date)]
 
     if "Revenue" in numeric_cols:
         filtered_df = filtered_df[filtered_df["Revenue"].between(*revenue_range)]
@@ -170,49 +181,52 @@ tab1, tab2, tab3, tab4 = st.tabs(["📊 Data Preview", "📈 Data Analytics", "�
 # --- Tab 1: Data Preview ---
 with tab1:
     st.header("📊 Data Preview")
-    if global_df is not None:
+    if st.session_state.global_df is not None:
+
         st.subheader("DataFrame")
-        st.dataframe(filtered_df)
+        st.dataframe(st.session_state.global_df)
+        st.write("Number of Rows:", len(st.session_state.global_df))
+        st.write("Number of Columns:", len(st.session_state.global_df.columns))
 
         st.subheader("Metadata")
-        st.write("Column Names:", list(global_df.columns))
+        st.write("Column Names:", list(st.session_state.global_df.columns))
         st.write("Data Types:")
-        st.write(global_df.dtypes)
+        st.write(st.session_state.global_df.dtypes)
         st.write("Missing Values:")
-        st.write(global_df.isnull().sum())
-        st.write("Duplicate Rows:", global_df.duplicated().sum())
+        st.write(st.session_state.global_df.isnull().sum())
+        st.write("Duplicate Rows:", st.session_state.global_df.duplicated().sum())
 
         st.subheader("Statistical Summary")
         st.write("Mean:")
-        st.write(global_df.select_dtypes(include='number').mean())
+        st.write(st.session_state.global_df.select_dtypes(include='number').mean())
         st.write("Median:")
-        st.write(global_df.select_dtypes(include='number').median())
+        st.write(st.session_state.global_df.select_dtypes(include='number').median())
         st.write("Mode:")
-        st.write(global_df.select_dtypes(include='number').mode().iloc[0])
+        st.write(st.session_state.global_df.select_dtypes(include='number').mode().iloc[0])
         st.write("Standard Deviation:")
-        st.write(global_df.select_dtypes(include='number').std())
+        st.write(st.session_state.global_df.select_dtypes(include='number').std())
         st.write("Variance:")
-        st.write(global_df.select_dtypes(include='number').var())
+        st.write(st.session_state.global_df.select_dtypes(include='number').var())
         st.write("Quartiles:")
-        st.write(global_df.select_dtypes(include='number').quantile([0.25, 0.5, 0.75]))
+        st.write(st.session_state.global_df.select_dtypes(include='number').quantile([0.25, 0.5, 0.75]))
     else:
         st.info("Please upload a CSV file in the sidebar to see data preview.")
 
 # --- Tab 2: Data Analytics ---
 with tab2:
     st.header("📈 Data Analytics")
-    if global_df is not None:
+    if st.session_state.global_df is not None:
         st.subheader("Data Quality Metrics")
-        completeness = 1 - global_df.isnull().mean()
+        completeness = 1 - st.session_state.global_df.isnull().mean()
         st.write("Completeness:")
         st.write(completeness)
 
         st.subheader("Outlier Detection")
         for col in numeric_cols:
-            q1 = global_df[col].quantile(0.25)
-            q3 = global_df[col].quantile(0.75)
+            q1 = st.session_state.global_df[col].quantile(0.25)
+            q3 = st.session_state.global_df[col].quantile(0.75)
             iqr = q3 - q1
-            outliers = global_df[(global_df[col] < q1 - 1.5 * iqr) | (global_df[col] > q3 + 1.5 * iqr)]
+            outliers = st.session_state.global_df[(st.session_state.global_df[col] < q1 - 1.5 * iqr) | (st.session_state.global_df[col] > q3 + 1.5 * iqr)]
             st.write(f"{col}: {len(outliers)} outliers")
 
         st.subheader("Recommendations")
@@ -225,23 +239,23 @@ with tab2:
 # --- Tab 3: Data Visualization ---
 with tab3:
     st.header("📉 Data Visualization")
-    if global_df is not None:
+    if st.session_state.global_df is not None:
         st.subheader("Recommended Charts")
 
-        if "Month" in global_df.columns and "Revenue" in global_df.columns and "Expenses" in global_df.columns:
+        if "Month" in st.session_state.global_df.columns and "Revenue" in st.session_state.global_df.columns and "Expenses" in st.session_state.global_df.columns:
             fig, ax = plt.subplots()
             filtered_df.plot(x="Month", y=["Revenue", "Expenses"], ax=ax, marker='o')
             st.pyplot(fig)
 
-        if "Month" in global_df.columns and "Customer_Satisfaction" in global_df.columns:
+        if "Month" in st.session_state.global_df.columns and "Customer_Satisfaction" in st.session_state.global_df.columns:
             fig2, ax2 = plt.subplots()
             sns.lineplot(data=filtered_df, x="Month", y="Customer_Satisfaction", marker='o', ax=ax2)
             st.pyplot(fig2)
 
         st.subheader("Custom Visualization")
         chart_type = st.selectbox("Select chart type", ["Line", "Bar", "Scatter"], key="custom_chart_type")
-        x_axis = st.selectbox("X-axis", global_df.columns, key="custom_x_axis")
-        y_axis = st.selectbox("Y-axis", global_df.columns, key="custom_y_axis")
+        x_axis = st.selectbox("X-axis", st.session_state.global_df.columns, key="custom_x_axis")
+        y_axis = st.selectbox("Y-axis", st.session_state.global_df.columns, key="custom_y_axis")
 
         if chart_type == "Line":
             fig3, ax3 = plt.subplots()
@@ -260,5 +274,49 @@ with tab3:
 
 with tab4:
     st.header("💬 Chat with Data")
-    st.write("This feature will allow users to query the data using natural language.")
-    st.info("Coming soon: AI-powered chat interface to explore your data interactively.")
+    st.write("Ask questions about your data using natural language. The AI will answer using open source models.")
+
+    # Load Gemma or other Hugging Face model (cached)
+    @st.cache_resource
+    def load_hf_model():
+        tokenizer = AutoTokenizer.from_pretrained("google/gemma-2b-it", token=HF_TOKEN)
+        model = AutoModelForCausalLM.from_pretrained("google/gemma-2b-it", token=HF_TOKEN)
+        return tokenizer, model
+
+    tokenizer, model = load_hf_model()
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    if prompt := st.chat_input("What do you want to know about your data?"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            if st.session_state.global_df is None:
+                st.warning("Please upload a CSV file in the sidebar to chat with data.")
+                st.session_state.messages.append({"role": "assistant", "content": "Please upload a CSV file in the sidebar to chat with data."})
+            else:
+                # Prepare context for the model
+                df_info = str(st.session_state.global_df.head(10))
+                input_text = f"You are a data analyst. Here is a sample of the dataset:\n{df_info}\n\nUser question: {prompt}\n\nAnswer in natural language."
+                with st.spinner("Generating answer..."):
+                    input_ids = tokenizer(input_text, return_tensors="pt").to(model.device)
+                    outputs = model.generate(**input_ids, max_new_tokens=256)
+                    raw_answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
+                # Remove prompt context from output if present
+                # Find the last occurrence of 'Answer in natural language.' and show only what comes after
+                split_token = "Answer in natural language."
+                if split_token in raw_answer:
+                    answer = raw_answer.split(split_token, 1)[-1].strip()
+                else:
+                    answer = raw_answer.strip()
+                st.markdown(answer)
+                st.session_state.messages.append({"role": "assistant", "content": answer})
+
+
