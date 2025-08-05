@@ -1,7 +1,7 @@
 pandas
 matplotlib
 seaborn
-streamlit
+streamlit==1.37.0
 pandas
 matplotlib
 seaborn
