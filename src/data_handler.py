@@ -3,8 +3,10 @@ import pandas as pd
 import io
 import streamlit as st
 
-@st.cache_data # Cache data loading to prevent re-reading on every rerun
-def load_csv_data(uploaded_file) -> pd.DataFrame:
+from streamlit.runtime.uploaded_file_manager import UploadedFile
+
+@st.cache_data
+def load_csv_data(uploaded_file: UploadedFile) -> pd.DataFrame:
     """
     Loads a CSV file into a Pandas DataFrame.
     """
@@ -17,7 +19,7 @@ def load_csv_data(uploaded_file) -> pd.DataFrame:
         st.error(f"Error loading CSV: {e}")
         return pd.DataFrame()
 
-def get_dataframe_info(df: pd.DataFrame) -> str: [12]
+def get_dataframe_info(df: pd.DataFrame) -> str:
     """
     Generates a string summary of the DataFrame's schema and basic statistics.
     This provides crucial context for the LLM.
